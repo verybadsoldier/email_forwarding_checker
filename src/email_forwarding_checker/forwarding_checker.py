@@ -15,21 +15,26 @@ class ForwardingChecker:
         imap_host: str,
         imap_username: str,
         imap_password: str,
+        delete_emails: bool = True,
     ) -> None:
         """
-        Initializes the SMTP client with the provided sender, SMTP host, SMTP port, username, and password.
+        Initializes the EmailForwarder class with the given SMTP and IMAP credentials.
 
         Args:
-            sender (str): The email address of the sender.
-            smtp_host (str): The hostname or IP address of the SMTP server.
-            smtp_port (int): The port number of the SMTP server.
-            username (str): The username for authentication with the SMTP server.
-            password (str): The password for authentication with the SMTP server.
+            smtp_sender (str): The email address of the sender.
+            smtp_host (str): The SMTP server hostname.
+            smtp_port (int): The SMTP server port.
+            smtp_username (str): The username for the SMTP server.
+            smtp_password (str): The password for the SMTP server.
+            imap_host (str): The IMAP server hostname.
+            imap_username (str): The username for the IMAP server.
+            imap_password (str): The password for the IMAP server.
+            delete_emails (bool, optional): Whether to delete forwarded emails from the destination mailbox. Defaults to True.
 
         Returns:
-            None: This function does not return any value.
+            None
         """
-        self._sender = smtp_sender
+        self._smtp_sender = smtp_sender
         self._smtp_username = smtp_username
         self._smtp_password = smtp_password
         self._smtp_host = smtp_host
@@ -37,8 +42,9 @@ class ForwardingChecker:
         self._imap_host = imap_host
         self._imap_username = imap_username
         self._imap_password = imap_password
-        self._body = "This is an automated email to test if mail forwarding is working"
-        self._subject_base = "FHEM EMail Forward Test"
+        self._body = "This is an automated email to test if configured mail forwarding is working  - sent by email_forwarding_checker (https://github.com/verybadsoldier/email_forwarding_checker)"
+        self._subject_base = "EMail Forward Test - email_forwarding_checker"
+        self._delete_emails = delete_emails
 
     def send_and_check_email(self, dest_email: str, timeout=120) -> bool:
         """
@@ -53,24 +59,28 @@ class ForwardingChecker:
         start_time = datetime.now()
 
         subject = f"{self._subject_base} - {dest_email}"
+
         # Send the email
         with smtplib.SMTP(self._smtp_host, self._smtp_port) as server:
             server.starttls()
             server.login(self._smtp_username, self._smtp_password)
             message = f"Subject: {subject}\n\n{self._body}"
-            server.sendmail(self._sender, dest_email, message)
+            server.sendmail(self._smtp_sender, dest_email, message)
 
         with imaplib.IMAP4_SSL(self._imap_host) as mail:
             mail.login(self._imap_username, self._imap_password)
             mail.select("inbox")
 
             while True:
-                time.sleep(5)
-
                 now = datetime.now()
 
                 if now - start_time > timedelta(seconds=timeout):
                     return False
+
+                time.sleep(5)
+
+                # Refresh mails without reconnect
+                mail.noop()
 
                 # Check if the email has been forwarded
                 status, email_ids = mail.search(None, f'(SUBJECT "{subject}")')
@@ -78,11 +88,21 @@ class ForwardingChecker:
                 if status != "OK":
                     raise RuntimeError("Error IMAP search")
 
+                found = False
                 for email_id_raw in email_ids[0].split():
                     _, msg_data = mail.fetch(email_id_raw, "(INTERNALDATE)")
                     timestamp = imaplib.Internaldate2tuple(msg_data[0])
 
+                    if self._delete_emails:
+                        mail.store(email_id_raw, "+FLAGS", "\\Deleted")
+
                     if now - datetime.fromtimestamp(time.mktime(timestamp)) < timedelta(
                         seconds=120
                     ):
-                        return True
+                        found = True
+
+                if self._delete_emails:
+                    mail.expunge()
+
+                if found:
+                    return True
