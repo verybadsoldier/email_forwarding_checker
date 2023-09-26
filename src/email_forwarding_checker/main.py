@@ -27,6 +27,7 @@ import sys
 import yaml
 
 from email_forwarding_checker import __version__
+from email_forwarding_checker.daemon import Daemon
 
 __author__ = "verybadsoldier"
 __copyright__ = "verybadsoldier"
@@ -90,6 +91,12 @@ def main(args):
     )
 
     parser.add_argument(
+        "--daemon",
+        action="store_true",
+        help="Run as a daemon permanently reporting via MQTT",
+    )
+
+    parser.add_argument(
         "--version",
         action="version",
         version=f"email_forwarding_checker {__version__}",
@@ -111,7 +118,7 @@ def main(args):
         const=logging.DEBUG,
     )
 
-    config = dict(timeout=120, smtp_port=587)
+    config = dict(timeout=120, smtp_port=587, delete_emails=False, mqtt_host="localhost", mqtt_port=1883)
 
     args = parser.parse_args(args)
 
@@ -128,13 +135,16 @@ def main(args):
         imap_host=config["imap_host"],
         imap_username=config["imap_username"],
         imap_password=config["imap_password"],
+        delete_emails=config["delete_emails"],
     )
 
-    report = {}
-    for addr in config["emails"]:
-        result = forwarding_checker.send_and_check_email(addr)
-        report[addr] = result
-    print(report)
+    if args.daemon:
+        _logger.info('Starting in daemon...')
+        d = Daemon(forwarding_checker, args['mqtt_host'], args['mqtt_port'])
+        d.run(config["emails"])
+    else:
+        report = forwarding_checker.check_multiple_emails(config["emails"])
+        print(report)
 
 
 def run():

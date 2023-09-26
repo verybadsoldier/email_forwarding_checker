@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 import time
 import smtplib
 import imaplib
+from typing import Dict, List
 
 
 class ForwardingChecker:
@@ -45,6 +46,13 @@ class ForwardingChecker:
         self._body = "This is an automated email to test if configured mail forwarding is working  - sent by email_forwarding_checker (https://github.com/verybadsoldier/email_forwarding_checker)"
         self._subject_base = "EMail Forward Test - email_forwarding_checker"
         self._delete_emails = delete_emails
+
+    def check_multiple_emails(self, emails: List[str]) -> Dict[str, bool]:
+        report = {}
+        for addr in emails:
+            result = self.send_and_check_email(addr)
+            report[addr] = result
+        return report
 
     def send_and_check_email(self, dest_email: str, timeout=120) -> bool:
         """
