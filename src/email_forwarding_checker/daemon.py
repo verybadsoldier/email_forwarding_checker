@@ -1,3 +1,4 @@
+import json
 import logging
 from typing import List, Optional
 import schedule
@@ -30,17 +31,21 @@ class Daemon:
 
         self._mqtt.connect()
 
-        for k, v in report.items():
-            topic = f"{self._mqtt_topic_base}/{k}"
-            _logger.info(f'Publishing test result for email address "{k}": {v}')
-            self._mqtt.publish(topic, "1" if v else "0")
+        json_object = json.dumps(report)
 
-    def run(self, interval: int, emails: List[str], email_timeout: int):
+        _logger.info("Publishing check report to MQTT")
+        self._mqtt.publish(self._mqtt_topic_base, json_object)
+
+    def run(self, interval: int, run_now: bool, emails: List[str], email_timeout: int):
         self._emails = emails
         self._email_timeout = email_timeout
 
         _logger.info(f"Scheduling job for every {interval} seconds...")
         schedule.every(interval).seconds.do(self._job)
+
+        if run_now:
+            _logger.info("Running job one time now")
+            schedule.run_all()
 
         while True:
             schedule.run_pending()
