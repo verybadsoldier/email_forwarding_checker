@@ -43,7 +43,7 @@ class ForwardingChecker:
         report = {}
         for addr in emails:
             result = self.send_and_check_email(addr, email_timeout)
-            report[addr] = result
+            report[addr] = 1 if result else 0
         return report
 
     def send_and_check_email(self, dest_email: str, email_timeout) -> bool:
@@ -52,39 +52,42 @@ class ForwardingChecker:
         subject = f"{self._subject_base} - {dest_email}"
 
         # Send the email
-        _logger.info(f"Logging into SMTP server: {self._smtp_host}")
+        _logger.info(f"{dest_email} - Logging into SMTP server: {self._smtp_host}")
         with smtplib.SMTP(self._smtp_host, self._smtp_port) as server:
             server.starttls()
             server.login(self._smtp_username, self._smtp_password)
             message = f"Subject: {subject}\n\n{self._body}"
-            _logger.info(f"Sending email to {dest_email}")
+            _logger.info(f"{dest_email} - Sending email to {dest_email}")
             server.sendmail(self._smtp_sender, dest_email, message)
 
-        _logger.info(f"Logging into IMAP server {self._imap_host}")
+        _logger.info(f"{dest_email} - Logging into IMAP server {self._imap_host}")
         with imaplib.IMAP4_SSL(self._imap_host) as mail:
             mail.login(self._imap_username, self._imap_password)
             mail.select(self._mailbox)
 
+            num_delete = 0
             while True:
                 now = datetime.now()
 
-                if now - start_time > timedelta(seconds=email_timeout):
+                diff = now - start_time
+                if diff > timedelta(seconds=email_timeout):
+                    _logger.info(f"{dest_email} - Timeout reached. Giving up")
                     return False
 
                 wait_time = 5
                 _logger.info(
-                    f"Waiting for {wait_time} seconds for the mail to arrive..."
+                    f"{dest_email} - Waiting for {wait_time} seconds for the mail to arrive... (Trying since {int(diff.total_seconds())}/{email_timeout} s)"
                 )
                 time.sleep(wait_time)
 
                 # Refresh mails without reconnect
                 mail.noop()
 
-                _logger.info(f"Searching for the mail in the inbox...")
+                _logger.info(f"{dest_email} - Searching for the mail in the inbox...")
                 status, email_ids = mail.search(None, f'(SUBJECT "{subject}")')
 
                 if status != "OK":
-                    raise RuntimeError("Error IMAP search")
+                    raise RuntimeError("{dest_email} - Error IMAP search")
 
                 found = False
                 for email_id_raw in email_ids[0].split():
@@ -92,19 +95,20 @@ class ForwardingChecker:
                     timestamp = imaplib.Internaldate2tuple(msg_data[0])
 
                     if self._delete_emails:
+                        num_delete += 1
                         mail.store(email_id_raw, "+FLAGS", "\\Deleted")
 
                     if now - datetime.fromtimestamp(time.mktime(timestamp)) < timedelta(
                         seconds=120
                     ):
-                        _logger.info(f"Mail found")
+                        _logger.info(f"{dest_email} - Mail found")
                         found = True
 
-                if self._delete_emails:
-                    _logger.info(f"Deleting marked emails")
+                if self._delete_emails and num_delete > 0:
+                    _logger.info(f"{dest_email} - Deleting marked emails")
                     mail.expunge()
 
                 if found:
                     return True
                 else:
-                    _logger.info(f"Mail not found")
+                    _logger.info(f"{dest_email} - Mail not found")

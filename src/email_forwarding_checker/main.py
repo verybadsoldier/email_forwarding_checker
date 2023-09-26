@@ -77,7 +77,7 @@ def main(args):
         imap=dict(mailbox="inbox"),
         timeout=120,
         delete_emails=False,
-        daemon_check_interval=5,
+        daemon=dict(check_interval=5, run_now=False),
         email_timeout=120,
     )
 
@@ -111,7 +111,10 @@ def main(args):
             config["mqtt"]["topic_base"],
         )
         d.run(
-            config["daemon_check_interval"], config["emails"], config["email_timeout"]
+            config["daemon"]["check_interval"],
+            config["daemon"]["run_now"],
+            config["emails"],
+            config["email_timeout"],
         )
     else:
         logging.getLogger().disabled = True
