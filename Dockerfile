@@ -4,6 +4,6 @@ COPY . /app
 
 RUN apk add git
 
-RUN cd /app && pip install .
+RUN pip install --upgrade pip && cd /app && pip install .
 
-CMD email_forwarding_checker
+CMD email_forwarding_checker --version
