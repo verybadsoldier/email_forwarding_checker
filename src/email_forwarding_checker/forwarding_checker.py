@@ -1,8 +1,11 @@
 from datetime import datetime, timedelta
-import time
-import smtplib
-import imaplib
 from typing import Dict, List
+import smtplib
+import logging
+import time
+import imaplib
+
+_logger = logging.getLogger(__name__)
 
 
 class ForwardingChecker:
@@ -16,25 +19,10 @@ class ForwardingChecker:
         imap_host: str,
         imap_username: str,
         imap_password: str,
-        delete_emails: bool = True,
+        imap_mailbox: str,
+        delete_emails: bool,
+        email_timeout: int,
     ) -> None:
-        """
-        Initializes the EmailForwarder class with the given SMTP and IMAP credentials.
-
-        Args:
-            smtp_sender (str): The email address of the sender.
-            smtp_host (str): The SMTP server hostname.
-            smtp_port (int): The SMTP server port.
-            smtp_username (str): The username for the SMTP server.
-            smtp_password (str): The password for the SMTP server.
-            imap_host (str): The IMAP server hostname.
-            imap_username (str): The username for the IMAP server.
-            imap_password (str): The password for the IMAP server.
-            delete_emails (bool, optional): Whether to delete forwarded emails from the destination mailbox. Defaults to True.
-
-        Returns:
-            None
-        """
         self._smtp_sender = smtp_sender
         self._smtp_username = smtp_username
         self._smtp_password = smtp_password
@@ -46,51 +34,53 @@ class ForwardingChecker:
         self._body = "This is an automated email to test if configured mail forwarding is working  - sent by email_forwarding_checker (https://github.com/verybadsoldier/email_forwarding_checker)"
         self._subject_base = "EMail Forward Test - email_forwarding_checker"
         self._delete_emails = delete_emails
+        self._mailbox = imap_mailbox
+        self._email_timeout = email_timeout
 
-    def check_multiple_emails(self, emails: List[str]) -> Dict[str, bool]:
+    def check_multiple_emails(
+        self, emails: List[str], email_timeout: int
+    ) -> Dict[str, bool]:
         report = {}
         for addr in emails:
-            result = self.send_and_check_email(addr)
+            result = self.send_and_check_email(addr, email_timeout)
             report[addr] = result
         return report
 
-    def send_and_check_email(self, dest_email: str, timeout=120) -> bool:
-        """
-        Sends an email to the specified destination email address and checks if it has been forwarded within the last 2 minutes.
-
-        Args:
-            dest_email (str): The destination email address where the email will be sent.
-
-        Returns:
-            bool: True if the email has been forwarded within the last 2 minutes, False otherwise.
-        """
+    def send_and_check_email(self, dest_email: str, email_timeout) -> bool:
         start_time = datetime.now()
 
         subject = f"{self._subject_base} - {dest_email}"
 
         # Send the email
+        _logger.info(f"Logging into SMTP server: {self._smtp_host}")
         with smtplib.SMTP(self._smtp_host, self._smtp_port) as server:
             server.starttls()
             server.login(self._smtp_username, self._smtp_password)
             message = f"Subject: {subject}\n\n{self._body}"
+            _logger.info(f"Sending email to {dest_email}")
             server.sendmail(self._smtp_sender, dest_email, message)
 
+        _logger.info(f"Logging into IMAP server {self._imap_host}")
         with imaplib.IMAP4_SSL(self._imap_host) as mail:
             mail.login(self._imap_username, self._imap_password)
-            mail.select("inbox")
+            mail.select(self._mailbox)
 
             while True:
                 now = datetime.now()
 
-                if now - start_time > timedelta(seconds=timeout):
+                if now - start_time > timedelta(seconds=email_timeout):
                     return False
 
-                time.sleep(5)
+                wait_time = 5
+                _logger.info(
+                    f"Waiting for {wait_time} seconds for the mail to arrive..."
+                )
+                time.sleep(wait_time)
 
                 # Refresh mails without reconnect
                 mail.noop()
 
-                # Check if the email has been forwarded
+                _logger.info(f"Searching for the mail in the inbox...")
                 status, email_ids = mail.search(None, f'(SUBJECT "{subject}")')
 
                 if status != "OK":
@@ -107,10 +97,14 @@ class ForwardingChecker:
                     if now - datetime.fromtimestamp(time.mktime(timestamp)) < timedelta(
                         seconds=120
                     ):
+                        _logger.info(f"Mail found")
                         found = True
 
                 if self._delete_emails:
+                    _logger.info(f"Deleting marked emails")
                     mail.expunge()
 
                 if found:
                     return True
+                else:
+                    _logger.info(f"Mail not found")
