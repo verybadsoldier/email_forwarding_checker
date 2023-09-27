@@ -1,6 +1,7 @@
 import json
 import logging
 import time
+from datetime import timedelta
 from typing import List, Optional
 
 import schedule
@@ -40,12 +41,18 @@ class Daemon:
         except Exception as ex:
             _logger.exception("Error in job execution", ex)
 
-    def run(self, interval: int, run_now: bool, emails: List[str], email_timeout: int):
+    def run(
+        self,
+        run_interval: timedelta,
+        run_now: bool,
+        emails: List[str],
+        email_timeout: int,
+    ):
         self._emails = emails
         self._email_timeout = email_timeout
 
-        _logger.info(f"Scheduling job for every {interval} seconds...")
-        schedule.every(interval).seconds.do(self._job)
+        _logger.info(f"Scheduling job every {run_interval}...")
+        schedule.every(run_interval.total_seconds()).seconds.do(self._job)
 
         if run_now:
             _logger.info("Running job one time now")

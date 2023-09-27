@@ -1,6 +1,7 @@
 import argparse
 import logging
 import sys
+from datetime import timedelta
 
 import yaml
 
@@ -78,7 +79,7 @@ def main(args):
         imap=dict(mailbox="inbox"),
         timeout=120,
         delete_emails=False,
-        daemon=dict(check_interval=5, run_now=False),
+        daemon=dict(check_interval_hours=24, run_now=False),
         email_timeout=120,
     )
 
@@ -112,7 +113,7 @@ def main(args):
             config["mqtt"]["topic_base"],
         )
         d.run(
-            config["daemon"]["check_interval"],
+            timedelta(hours=config["daemon"]["check_interval_hours"]),
             config["daemon"]["run_now"],
             config["emails"],
             config["email_timeout"],
