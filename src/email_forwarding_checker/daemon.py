@@ -1,8 +1,9 @@
 import json
 import logging
-from typing import List, Optional
-import schedule
 import time
+from typing import List, Optional
+
+import schedule
 
 from email_forwarding_checker.forwarding_checker import ForwardingChecker
 from email_forwarding_checker.mqtt import Mqtt

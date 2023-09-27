@@ -1,11 +1,12 @@
-from email_forwarding_checker.forwarding_checker import ForwardingChecker
 import argparse
 import logging
 import sys
+
 import yaml
 
 from email_forwarding_checker import __version__
 from email_forwarding_checker.daemon import Daemon
+from email_forwarding_checker.forwarding_checker import ForwardingChecker
 
 __author__ = "verybadsoldier"
 __copyright__ = "verybadsoldier"

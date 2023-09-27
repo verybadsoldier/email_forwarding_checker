@@ -1,9 +1,9 @@
+import imaplib
+import logging
+import smtplib
+import time
 from datetime import datetime, timedelta
 from typing import Dict, List
-import smtplib
-import logging
-import time
-import imaplib
 
 _logger = logging.getLogger(__name__)
 

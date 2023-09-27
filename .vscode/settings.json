@@ -2,6 +2,9 @@
     "[python]": {
         "diffEditor.ignoreTrimWhitespace": false,
         "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+            "source.organizeImports": true,
+        },
         "editor.wordBasedSuggestions": false,
         "editor.defaultFormatter": "ms-python.black-formatter",
     }
