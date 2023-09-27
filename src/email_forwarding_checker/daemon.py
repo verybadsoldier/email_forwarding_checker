@@ -26,15 +26,18 @@ class Daemon:
         self._mqtt_topic_base = mqtt_topic_base
 
     def _job(self):
-        _logger.info("Starting mail check")
-        report = self._fc.check_multiple_emails(self._emails, self._email_timeout)
+        try:
+            _logger.info("Starting mail check")
+            report = self._fc.check_multiple_emails(self._emails, self._email_timeout)
 
-        self._mqtt.connect()
+            self._mqtt.connect()
 
-        json_object = json.dumps(report)
+            json_object = json.dumps(report)
 
-        _logger.info("Publishing check report to MQTT")
-        self._mqtt.publish(self._mqtt_topic_base, json_object)
+            _logger.info("Publishing check report to MQTT")
+            self._mqtt.publish(self._mqtt_topic_base, json_object)
+        except Exception as ex:
+            _logger.exception("Error in job execution", ex)
 
     def run(self, interval: int, run_now: bool, emails: List[str], email_timeout: int):
         self._emails = emails
