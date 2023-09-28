@@ -24,7 +24,7 @@ class Daemon:
         self._mqtt = Mqtt(mqtt_host, mqtt_port)
 
         self._emails: Optional[List[str]] = None
-        self._email_timeout: Optional[int] = None
+        self._email_timeout: Optional[timedelta] = None
         self._mqtt_topic_base = mqtt_topic_base
 
     def _job(self):
@@ -40,13 +40,15 @@ class Daemon:
             self._mqtt.publish(self._mqtt_topic_base, json_object)
         except Exception as ex:
             _logger.exception("Error in job execution", ex)
+        finally:
+            _logger.info("Job execution finished")
 
     def run(
         self,
         run_interval: timedelta,
         run_now: bool,
         emails: List[str],
-        email_timeout: int,
+        email_timeout: timedelta,
     ):
         self._emails = emails
         self._email_timeout = email_timeout

@@ -52,6 +52,13 @@ def main(args):
     )
 
     parser.add_argument(
+        "--emails",
+        help="Overrides the emaiRun as a daemon permanently reporting via MQTT",
+        type=str,
+        nargs="*",
+    )
+
+    parser.add_argument(
         "--version",
         action="version",
         version=f"email_forwarding_checker {__version__}",
@@ -89,6 +96,9 @@ def main(args):
         config = yaml.safe_load(f)
         setdefault_recursively(config, config_defaults)
 
+    if args.emails is not None and len(args.emails) > 0:
+        config["emails"] = args.emails
+
     forwarding_checker = ForwardingChecker(
         smtp_sender=config["smtp"]["sender"],
         smtp_host=config["smtp"]["host"],
@@ -103,6 +113,8 @@ def main(args):
         email_timeout=config["email_timeout"],
     )
 
+    email_timeout = timedelta(seconds=config["email_timeout"])
+
     if args.daemon:
         setup_logging(logging.INFO)
         _logger.info(f"Starting in daemon with config: {str(config)}")
@@ -116,12 +128,12 @@ def main(args):
             timedelta(hours=config["daemon"]["check_interval_hours"]),
             config["daemon"]["run_now"],
             config["emails"],
-            config["email_timeout"],
+            email_timeout,
         )
     else:
         logging.getLogger().disabled = True
         report = forwarding_checker.check_multiple_emails(
-            config["emails"], config["email_timeout"]
+            config["emails"], email_timeout
         )
         print(report)
 

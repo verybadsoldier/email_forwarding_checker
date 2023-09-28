@@ -38,7 +38,7 @@ class ForwardingChecker:
         self._email_timeout = email_timeout
 
     def check_multiple_emails(
-        self, emails: List[str], email_timeout: int
+        self, emails: List[str], email_timeout: timedelta
     ) -> Dict[str, bool]:
         report = {}
         for addr in emails:
@@ -46,17 +46,19 @@ class ForwardingChecker:
             report[addr] = 1 if result else 0
         return report
 
-    def send_and_check_email(self, dest_email: str, email_timeout) -> bool:
-        start_time = datetime.now()
-
+    def send_and_check_email(self, dest_email: str, email_timeout: timedelta) -> bool:
         subject = f"{self._subject_base} - {dest_email}"
 
         # Send the email
+        start_time = datetime.now()
         _logger.info(f"{dest_email} - Logging into SMTP server: {self._smtp_host}")
         with smtplib.SMTP(self._smtp_host, self._smtp_port) as server:
             server.starttls()
             server.login(self._smtp_username, self._smtp_password)
-            message = f"Subject: {subject}\n\n{self._body}"
+
+            body = self._body + f"\nSent on: {str(datetime.now().isoformat())}"
+
+            message = f"Subject: {subject}\n\n{body}"
             _logger.info(f"{dest_email} - Sending email to {dest_email}")
             server.sendmail(self._smtp_sender, dest_email, message)
 
@@ -70,7 +72,7 @@ class ForwardingChecker:
                 now = datetime.now()
 
                 diff = now - start_time
-                if diff > timedelta(seconds=email_timeout):
+                if diff > email_timeout:
                     _logger.info(f"{dest_email} - Timeout reached. Giving up")
                     return False
 
@@ -98,9 +100,7 @@ class ForwardingChecker:
                         num_delete += 1
                         mail.store(email_id_raw, "+FLAGS", "\\Deleted")
 
-                    if now - datetime.fromtimestamp(time.mktime(timestamp)) < timedelta(
-                        seconds=120
-                    ):
+                    if datetime.fromtimestamp(time.mktime(timestamp)) > start_time:
                         _logger.info(f"{dest_email} - Mail found")
                         found = True
 
