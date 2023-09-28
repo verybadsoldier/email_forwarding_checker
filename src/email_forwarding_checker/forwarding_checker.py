@@ -78,7 +78,7 @@ class ForwardingChecker:
 
                 wait_time = 5
                 _logger.info(
-                    f"{dest_email} - Waiting for {wait_time} seconds for the mail to arrive... (Trying since {diff.microseconds=0}/{email_timeout})"
+                    f"{dest_email} - Waiting for {wait_time} seconds for the mail to arrive... (Trying since {diff}/{email_timeout})"
                 )
                 time.sleep(wait_time)
 
