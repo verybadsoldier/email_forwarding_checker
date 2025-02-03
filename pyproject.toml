@@ -14,7 +14,7 @@ dependencies = [
 dev = [ "types-paho-mqtt" ]
 
 [project.scripts]
-cli-name = "email_forwarding_checker:__main__"
+email_forwarding_checker = "email_forwarding_checker:__main__"
 
 [build-system]
 requires = ["hatchling", "hatch-vcs"]
