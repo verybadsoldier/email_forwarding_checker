@@ -55,7 +55,7 @@ class Daemon:
         self._emails = emails
         self._email_timeout = email_timeout
 
-        _logger.info("Scheduling job every %d...", run_interval)
+        _logger.info("Scheduling job every %d...", run_interval.total_seconds())
         schedule.every(int(run_interval.total_seconds())).seconds.do(self._job)
 
         if run_now:
