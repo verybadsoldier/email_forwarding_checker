@@ -30,6 +30,8 @@ class Daemon:
     def _job(self):
         try:
             _logger.info("Starting mail check")
+            assert self._emails is not None
+            assert self._email_timeout is not None
             report = self._fc.check_multiple_emails(self._emails, self._email_timeout)
 
             self._mqtt.connect()
@@ -38,8 +40,8 @@ class Daemon:
 
             _logger.info("Publishing check report to MQTT")
             self._mqtt.publish(self._mqtt_topic_base, json_object)
-        except Exception as ex:
-            _logger.exception("Error in job execution", ex)
+        except Exception:
+            _logger.exception("Error in job execution")
         finally:
             _logger.info("Job execution finished")
 
@@ -53,8 +55,8 @@ class Daemon:
         self._emails = emails
         self._email_timeout = email_timeout
 
-        _logger.info(f"Scheduling job every {run_interval}...")
-        schedule.every(run_interval.total_seconds()).seconds.do(self._job)
+        _logger.info("Scheduling job every %d...", run_interval)
+        schedule.every(int(run_interval.total_seconds())).seconds.do(self._job)
 
         if run_now:
             _logger.info("Running job one time now")

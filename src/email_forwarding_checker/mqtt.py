@@ -13,14 +13,14 @@ class Mqtt:
         self._client = mqtt.Client()
 
     def connect(self):
-        _logger.info(f"Connecting to MQTT host '{self._mqtthost}:{self._mqttport}'")
+        _logger.info("Connecting to MQTT host '%s:%d'", self._mqtthost, self._mqttport)
 
         self._client.connect(self._mqtthost, self._mqttport, 60)
         self._client.loop_start()
-
+        
     def disconnect(self):
         self._client.disconnect()
 
     def publish(self, topic, value):
-        _logger.info(f"Publishing MQTT message to topic '{topic}' with value '{value}'")
+        _logger.info("Publishing MQTT message to topic '%s' with value '%d'", topic, value)
         self._client.publish(topic, value)

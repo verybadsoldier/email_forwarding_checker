@@ -111,13 +111,14 @@ def main(args):
         imap_mailbox=config["imap"]["mailbox"],
         delete_emails=config["delete_emails"],
         email_timeout=config["email_timeout"],
+        repeat_interval=config["repeat_interval"],
     )
 
     email_timeout = timedelta(seconds=config["email_timeout"])
 
     if args.daemon:
         setup_logging(logging.INFO)
-        _logger.info(f"Starting in daemon with config: {str(config)}")
+        _logger.info("Starting in daemon with config: %s", str(config))
         d = Daemon(
             forwarding_checker,
             config["mqtt"]["host"],
