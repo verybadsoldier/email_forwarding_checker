@@ -17,10 +17,10 @@ class Mqtt:
 
         self._client.connect(self._mqtthost, self._mqttport, 60)
         self._client.loop_start()
-        
+
     def disconnect(self):
         self._client.disconnect()
 
-    def publish(self, topic, value):
-        _logger.info("Publishing MQTT message to topic '%s' with value '%d'", topic, value)
+    def publish(self, topic: str, value: str):
+        _logger.info("Publishing MQTT message to topic '%s' with value '%s'", topic, value)
         self._client.publish(topic, value)
