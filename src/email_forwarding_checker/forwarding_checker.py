@@ -81,16 +81,20 @@ class ForwardingChecker:
                 _logger.info("%s - Waiting for %d seconds for the mail to arrive... (Trying since %s/%s)", dest_email, self._repeat_interval, diff, email_timeout)
                 time.sleep(self._repeat_interval)
 
+                # Refresh inbox
+                mail.noop()
+
                 _logger.info("%s - Searching for the mail in the inbox...", dest_email)
+
                 #status, email_ids = mail.search(None, f'(SUBJECT "{subject}")')
-                status, email_ids = mail.search(None, 'UNSEEN')
+                status, email_ids = mail.uid('search', None, "UNSEEN")
 
                 if status != "OK":
                     raise RuntimeError("{dest_email} - Error IMAP search")
 
                 found = False
-                for email_id_raw in email_ids[0].split():
-                    _, msg_data = mail.fetch(email_id_raw, "(BODY.PEEK[HEADER.FIELDS (SUBJECT DATE)])")
+                for email_uid in email_ids[0].split():
+                    _, msg_data = mail.uid('fetch', email_uid, "(BODY.PEEK[HEADER.FIELDS (SUBJECT DATE)])")
                     if msg_data is None:
                         _logger.warning("%s - No email data found", dest_email)
                         continue
@@ -108,14 +112,19 @@ class ForwardingChecker:
                     if email_subject != subject:
                         continue
 
+                    _logger.debug("%s - Email with matching subject found", dest_email)
+
                     if self._delete_emails:
                         num_delete += 1
-                        mail.store(email_id_raw, "+FLAGS", "\\Deleted")
+                        mail.uid('store', email_uid, "+FLAGS", "(\\Deleted)")
 
                     timestamp = parsedate_to_datetime(msg["Date"])
-                    if timestamp > start_time:
+                    if timestamp >= start_time:
                         _logger.info("%s - Mail found", dest_email)
                         found = True
+                    else:
+                        _logger.debug("%s - Found email too old", dest_email)
+
 
                 if num_delete > 0:
                     _logger.info("%s - Deleting marked emails", dest_email)
