@@ -67,14 +67,6 @@ def main(args):
         "-v",
         "--verbose",
         dest="loglevel",
-        help="set loglevel to INFO",
-        action="store_const",
-        const=logging.INFO,
-    )
-    parser.add_argument(
-        "-vv",
-        "--very-verbose",
-        dest="loglevel",
         help="set loglevel to DEBUG",
         action="store_const",
         const=logging.DEBUG,
@@ -117,7 +109,7 @@ def main(args):
     email_timeout = timedelta(seconds=config["email_timeout"])
 
     if args.daemon:
-        setup_logging(logging.INFO)
+        setup_logging(logging.INFO if args.loglevel is None else args.loglevel)
         _logger.info("Starting in daemon with config: %s", str(config))
         d = Daemon(
             forwarding_checker,
@@ -126,7 +118,7 @@ def main(args):
             config["mqtt"]["topic_base"],
         )
         d.run(
-            timedelta(hours=config["daemon"]["check_interval_hours"]),
+            timedelta(minutes=config["daemon"]["check_interval_minutes"]),
             config["daemon"]["run_now"],
             config["emails"],
             email_timeout,

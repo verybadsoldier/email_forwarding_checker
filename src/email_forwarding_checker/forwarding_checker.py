@@ -44,93 +44,106 @@ class ForwardingChecker:
     def check_multiple_emails(self, emails: List[str], email_timeout: timedelta) -> Dict[str, int]:
         report: Dict[str, int] = {}
         for addr in emails:
-            result = self.send_and_check_email(addr, email_timeout)
+            num_retries = 1
+            
+            tokens = addr.split(":")
+            addr = tokens[0]
+            if len(tokens) > 1:
+                num_retries = int(tokens[1])
+
+            result = self.send_and_check_email(addr, email_timeout, num_retries)
             report[addr] = 1 if result else 0
         return report
 
-    def send_and_check_email(self, dest_email: str, email_timeout: timedelta) -> bool:
+    def send_and_check_email(self, dest_email: str, email_timeout: timedelta, num_retries: int = 1) -> bool:
         subject = f"{self._subject_base} - {dest_email}"
 
-        # Send the email
-        start_time = datetime.now().astimezone()
-        _logger.info("%s - Logging into SMTP server: %s", dest_email, self._smtp_host)
-        with smtplib.SMTP(self._smtp_host, self._smtp_port) as server:
-            server.starttls()
-            server.login(self._smtp_username, self._smtp_password)
+        for i in range(num_retries):
+            _logger.info("%s - Starting try #%d/%d...", dest_email, i+1, num_retries)
+            # Send the email
+            start_time = datetime.now().astimezone()
+            _logger.info("%s - Logging into SMTP server: %s", dest_email, self._smtp_host)
+            with smtplib.SMTP(self._smtp_host, self._smtp_port) as server:
+                server.starttls()
+                server.login(self._smtp_username, self._smtp_password)
 
-            body = self._body + f"\nSent on: {str(datetime.now().isoformat())}"
+                body = self._body + f"\nSent on: {str(datetime.now().isoformat())}"
 
-            message = f"Subject: {subject}\n\n{body}"
-            _logger.info("%s - Sending email to %s", dest_email, dest_email)
-            server.sendmail(self._smtp_sender, dest_email, message)
+                message = f"Subject: {subject}\n\n{body}"
+                _logger.info("%s - Sending email to %s", dest_email, dest_email)
+                result = server.sendmail(self._smtp_sender, dest_email, message)
+                if len(result) > 0:
+                    _logger.error("Sending mail failed!")
 
-        _logger.info("%s - Logging into IMAP server %s", dest_email ,self._imap_host)
-        with imaplib.IMAP4_SSL(self._imap_host) as mail:
-            mail.login(self._imap_username, self._imap_password)
-            mail.select(self._mailbox)
+            _logger.info("%s - Logging into IMAP server %s", dest_email ,self._imap_host)
+            with imaplib.IMAP4_SSL(self._imap_host) as mail:
+                mail.login(self._imap_username, self._imap_password)
+                mail.select(self._mailbox)
 
-            num_delete = 0
-            while True:
-                now = datetime.now().astimezone()
+                num_delete = 0
+                while True:
+                    now = datetime.now().astimezone()
 
-                diff = now - start_time
-                if diff > email_timeout:
-                    _logger.info("%s - Timeout reached. Giving up", dest_email)
-                    return False
+                    diff = now - start_time
+                    if diff > email_timeout:
+                        _logger.info("%s - Timeout reached. Giving up", dest_email)
+                        break
 
-                _logger.info("%s - Waiting for %d seconds for the mail to arrive... (Trying since %s/%s)", dest_email, self._repeat_interval, diff, email_timeout)
-                time.sleep(self._repeat_interval)
+                    _logger.info("%s - Waiting for %d seconds for the mail to arrive... (Trying since %s/%s)", dest_email, self._repeat_interval, diff, email_timeout)
+                    time.sleep(self._repeat_interval)
 
-                # Refresh inbox
-                mail.noop()
+                    # Refresh inbox
+                    mail.noop()
 
-                _logger.info("%s - Searching for the mail in the inbox...", dest_email)
+                    _logger.info("%s - Searching for the mail in the inbox...", dest_email)
 
-                #status, email_ids = mail.search(None, f'(SUBJECT "{subject}")')
-                status, email_ids = mail.uid('search', None, "UNSEEN")
+                    #status, email_ids = mail.search(None, f'(SUBJECT "{subject}")')
+                    status, email_ids = mail.uid('search', None, "UNSEEN")
 
-                if status != "OK":
-                    raise RuntimeError("{dest_email} - Error IMAP search")
+                    if status != "OK":
+                        raise RuntimeError("{dest_email} - Error IMAP search")
 
-                found = False
-                for email_uid in email_ids[0].split():
-                    _, msg_data = mail.uid('fetch', email_uid, "(BODY.PEEK[HEADER.FIELDS (SUBJECT DATE)])")
-                    if msg_data is None:
-                        _logger.warning("%s - No email data found", dest_email)
-                        continue
-                    
-                    response = msg_data[0]
-                    if response is None:
-                        _logger.warning("%s - No email response data found", dest_email)
-                        continue
+                    found = False
+                    for email_uid in email_ids[0].split():
+                        _, msg_data = mail.uid('fetch', email_uid, "(BODY.PEEK[HEADER.FIELDS (SUBJECT DATE)])")
+                        if msg_data is None:
+                            _logger.warning("%s - No email data found", dest_email)
+                            continue
+                        
+                        response = msg_data[0]
+                        if response is None:
+                            _logger.warning("%s - No email response data found", dest_email)
+                            continue
 
-                    raw_email = response[1]
-                    assert isinstance(raw_email, bytes)
-                    msg = email.message_from_bytes(raw_email)
+                        raw_email = response[1]
+                        assert isinstance(raw_email, bytes)
+                        msg = email.message_from_bytes(raw_email)
 
-                    email_subject = msg["Subject"]
-                    if email_subject != subject:
-                        continue
+                        email_subject = msg["Subject"]
+                        if email_subject != subject:
+                            continue
 
-                    _logger.debug("%s - Email with matching subject found", dest_email)
+                        _logger.debug("%s - Email with matching subject found", dest_email)
 
-                    if self._delete_emails:
-                        num_delete += 1
-                        mail.uid('store', email_uid, "+FLAGS", "(\\Deleted)")
+                        if self._delete_emails:
+                            num_delete += 1
+                            mail.uid('store', email_uid, "+FLAGS", "(\\Deleted)")
 
-                    timestamp = parsedate_to_datetime(msg["Date"])
-                    if timestamp >= start_time:
-                        _logger.info("%s - Mail found", dest_email)
-                        found = True
+                        timestamp = parsedate_to_datetime(msg["Date"])
+                        if timestamp >= start_time:
+                            _logger.info("%s - Test mail found", dest_email)
+                            found = True
+                        else:
+                            _logger.debug("%s - Found email too old", dest_email)
+
+
+                    if num_delete > 0:
+                        _logger.info("%s - Deleting marked emails", dest_email)
+                        mail.expunge()
+
+                    if found:
+                        return True
                     else:
-                        _logger.debug("%s - Found email too old", dest_email)
-
-
-                if num_delete > 0:
-                    _logger.info("%s - Deleting marked emails", dest_email)
-                    mail.expunge()
-
-                if found:
-                    return True
-                else:
-                    _logger.info("%s - Mail not found", dest_email)
+                        _logger.info("%s - Test mail not found", dest_email)
+        _logger.info("%s - Test mail not found after all retries. Exiting...", dest_email)
+        return False
